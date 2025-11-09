@@ -1,0 +1,21 @@
+{
+  "name": "devtinder-be",
+  "version": "1.0.0",
+  "description": "tinder for developer",
+  "main": "index.js",
+  "scripts": {
+    "start":"node src/app.js",
+    "dev" :"nodemon src/app.js"
+  },
+  "keywords": [
+    "NodeJs",
+    "JavaScript",
+    "MongoDB",
+    "Express"
+  ],
+  "author": "Aditya Jha",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
