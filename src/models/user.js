@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const validator = require("validator")
 
 const userSchema = new mongoose.Schema({
   firtstName: {
@@ -15,10 +16,20 @@ const userSchema = new mongoose.Schema({
     required: true,
     unique: true,
     trim: true,
+    validate(value){
+      if(!validator.isEmail(value)){
+        throw new Error("Inavlid Email Address" + value);
+      }
+    },
   },
   password: {
     type: String,
     required: true,
+    validate(value){
+      if(!validator.isStrongPassword(value)){
+        throw new Error("Enter a strong password" + value);
+      }
+    },
   },
   gender: {
     type: String,
@@ -36,6 +47,11 @@ const userSchema = new mongoose.Schema({
     type: String,
     default:
       "https://www.shutterstock.com/image-vector/simple-gray-avatar-icons-representing-260nw-2473353263.jpg",
+      validate(value){
+      if(!validator.isURL(value)){
+        throw new Error("Inavlid Photo URL :" + value);
+      }
+    },
   },
   about: {
     type: String,
