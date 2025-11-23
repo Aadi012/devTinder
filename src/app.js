@@ -7,7 +7,7 @@ const cookieParser = require("cookie-parser");
 const cors = require("cors");
 
 app.use(cors({
-  origin: "http://16.170.218.197",
+  origin: "http://localhost:5173",
   credentials:true,
 }));
 app.use(express.json());
@@ -18,10 +18,10 @@ const profileRouter = require("./routes/profile");
 const requestRouter = require("./routes/request");
 const userRouter = require("./routes/user");
 
-app.use("/api", authRouter);
-app.use("/api", profileRouter);
-app.use("/api", requestRouter);
-app.use("/api", userRouter);
+app.use("/", authRouter);
+app.use("/", profileRouter);
+app.use("/", requestRouter);
+app.use("/", userRouter);
 connectDB()
   .then(() => {
     console.log("Database connection established... ");
