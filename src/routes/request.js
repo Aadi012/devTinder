@@ -4,6 +4,7 @@ const requestRouter = express.Router();
 const { userAuth } = require("../middlewares/auth");
 const ConnectionRequest = require("../models/connectionRequest");
 const User = require("../models/user");
+const {run} = require("../utils/sendEmail");
 
 requestRouter.post(
   "/request/send/:status/:toUserId",
@@ -46,6 +47,9 @@ requestRouter.post(
 
       const data = await connectionRequest.save();
 
+      // const emailRes = await run();
+      // console.log("EMAIL SENT ✅:", emailRes);
+
       // const emailRes = await sendEmail.run(
       //   "A new friend request from " + req.user.firstName,
       //   req.user.firstName + " is " + status + " in " + toUser.firstName
@@ -59,7 +63,7 @@ requestRouter.post(
 
       const message = `${req.user.firstName} ${statusMessageMap[status]} ${toUser.firstName}`;
 
-      res.json({message, data});
+      res.json({ message, data });
     } catch (err) {
       res.status(400).send("ERROR: " + err.message);
     }
@@ -100,6 +104,5 @@ requestRouter.post(
     }
   }
 );
-
 
 module.exports = requestRouter;
