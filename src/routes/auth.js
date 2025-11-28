@@ -7,10 +7,29 @@ const bcrypt = require("bcrypt");
 // ------------------ SIGNUP ------------------
 authRouter.post("/signup", async (req, res) => {
   try {
-    // Validation of data
+    // Validate input fields
     validateSignupData(req);
 
-    const { firstName, lastName, emailId, password,skills,age,gender,about,photoUrl } = req.body;
+    const { firstName, lastName, emailId, password, skills, age, gender, about, photoUrl } = req.body;
+
+    // Check if email already exists
+    const existingUser = await User.findOne({ emailId });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "This email is already registered. Please login instead.",
+      });
+    }
+
+    // Strong password recommendation
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters long.",
+      });
+    }
+
+    // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
     const user = new User({
@@ -21,24 +40,34 @@ authRouter.post("/signup", async (req, res) => {
       skills,
       age,
       gender,
-      photoUrl,
       about,
+      photoUrl,
     });
 
     const savedUser = await user.save();
     const token = await savedUser.getJWT();
 
-    // Set cookie with proper options
+    // Set secure cookie
     res.cookie("token", token, {
       httpOnly: true,
       expires: new Date(Date.now() + 8 * 3600000),
-      sameSite: "lax", // allows cross-site cookies
-      secure: false,   // true only if HTTPS
+      sameSite: "lax",
+      secure: false, // Change to true when using HTTPS
     });
 
-    res.json({ message: "User Added Successfully!", data: savedUser });
+    return res.json({
+      success: true,
+      message: "Account created successfully!",
+      data: savedUser,
+    });
+
   } catch (err) {
-    res.status(400).send("ERROR: " + err.message);
+    console.error("SIGNUP ERROR:", err.message);
+
+    return res.status(400).json({
+      success: false,
+      message: err.message || "Signup failed. Please try again.",
+    });
   }
 });
 
@@ -47,15 +76,27 @@ authRouter.post("/login", async (req, res) => {
   try {
     const { emailId, password } = req.body;
 
+    // Check user existence
     const user = await User.findOne({ emailId });
-    if (!user) throw new Error("Invalid credentials");
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Incorrect email or password.",
+      });
+    }
 
+    // Validate password
     const isPasswordValid = await user.validatePassword(password);
-    if (!isPasswordValid) throw new Error("Invalid credentials");
+    if (!isPasswordValid) {
+      return res.status(400).json({
+        success: false,
+        message: "Incorrect email or password.",
+      });
+    }
 
     const token = await user.getJWT();
 
-    // Set cookie with proper options
+    // Set cookie
     res.cookie("token", token, {
       httpOnly: true,
       expires: new Date(Date.now() + 8 * 3600000),
@@ -63,21 +104,42 @@ authRouter.post("/login", async (req, res) => {
       secure: false,
     });
 
-    res.json({ message: "Login successful!", data: user });
+    return res.json({
+      success: true,
+      message: "Login successful!",
+      data: user,
+    });
+
   } catch (err) {
-    res.status(400).send("ERROR: " + err.message);
+    console.error("LOGIN ERROR:", err.message);
+
+    return res.status(400).json({
+      success: false,
+      message: err.message || "Login failed. Please try again.",
+    });
   }
 });
 
 // ------------------ LOGOUT ------------------
 authRouter.post("/logout", async (req, res) => {
-  res.cookie("token", null, {
-    httpOnly: true,
-    expires: new Date(Date.now()),
-    sameSite: "lax",
-    secure: false,
-  });
-  res.send("Logout Successfully!");
+  try {
+    res.cookie("token", null, {
+      httpOnly: true,
+      expires: new Date(Date.now()),
+      sameSite: "lax",
+      secure: false,
+    });
+
+    return res.json({
+      success: true,
+      message: "Logged out successfully.",
+    });
+  } catch (err) {
+    return res.status(400).json({
+      success: false,
+      message: "Logout failed. Try again!",
+    });
+  }
 });
 
 module.exports = authRouter;

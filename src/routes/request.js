@@ -4,7 +4,7 @@ const requestRouter = express.Router();
 const { userAuth } = require("../middlewares/auth");
 const ConnectionRequest = require("../models/connectionRequest");
 const User = require("../models/user");
-const {run} = require("../utils/sendEmail");
+const { run } = require("../utils/sendEmail");
 
 requestRouter.post(
   "/request/send/:status/:toUserId",
@@ -33,6 +33,7 @@ requestRouter.post(
           { fromUserId: toUserId, toUserId: fromUserId },
         ],
       });
+
       if (existingConnectionRequest) {
         return res
           .status(400)
@@ -47,23 +48,29 @@ requestRouter.post(
 
       const data = await connectionRequest.save();
 
-      // const emailRes = await run();
-      // console.log("EMAIL SENT ✅:", emailRes);
+      const subject = `New connection request from ${req.user.firstName} on Homio`;
 
-      // const emailRes = await sendEmail.run(
-      //   "A new friend request from " + req.user.firstName,
-      //   req.user.firstName + " is " + status + " in " + toUser.firstName
-      // );
-      // console.log(emailRes);
+      const message = `
+Hi ${toUser.firstName},
+
+You have received a new connection request from ${req.user.firstName}.
+
+Login here: https://www.homio.co.in
+      `;
+
+      if (toUser.emailId) {
+        const emailRes = await run(subject, message, toUser.emailId);
+        console.log("EMAIL SENT ✅:", emailRes?.MessageId);
+      }
 
       const statusMessageMap = {
         interested: "is interested in connecting with",
         ignored: "has ignored",
       };
 
-      const message = `${req.user.firstName} ${statusMessageMap[status]} ${toUser.firstName}`;
+      const messageResponse = `${req.user.firstName} ${statusMessageMap[status]} ${toUser.firstName}`;
 
-      res.json({ message, data });
+      res.json({ message: messageResponse, data });
     } catch (err) {
       res.status(400).send("ERROR: " + err.message);
     }
@@ -88,6 +95,7 @@ requestRouter.post(
         toUserId: loggedInUser._id,
         status: "interested",
       });
+
       if (!connectionRequest) {
         return res
           .status(404)

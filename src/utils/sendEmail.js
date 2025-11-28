@@ -1,25 +1,17 @@
 const { SendEmailCommand } = require("@aws-sdk/client-ses");
 const { sesClient } = require("./sesClient");
 
-
-const createSendEmailCommand = (
-  toAddress,
-  subject,
-  htmlBody,
-  textBody
-) => {
+const createSendEmailCommand = (toAddress, subject, htmlBody, textBody) => {
   return new SendEmailCommand({
-    Source: "aditya@homio.co.in", 
+    Source: "aditya@homio.co.in",
     Destination: {
       ToAddresses: [toAddress],
     },
-
     Message: {
       Subject: {
         Charset: "UTF-8",
         Data: subject,
       },
-
       Body: {
         Html: {
           Charset: "UTF-8",
@@ -34,22 +26,28 @@ const createSendEmailCommand = (
   });
 };
 
+const run = async (subject, message, toEmail) => {
+  const htmlTemplate = `
+    <h2>Hello from Homio</h2>
+    <p>${message}</p>
 
-const run = async () => {
+    <br/>
+    <a href="https://www.homio.co.in">Open Homio</a>
+    <br/><br/>
+
+    <p>Team Homio</p>
+  `;
+
   const sendEmailCommand = createSendEmailCommand(
-    "jhaaditya778@gmail.com",
-    "Welcome to Homio 🚀",
-    `
-      <h1>Welcome to Homio</h1>
-      <p>Your account is ready.</p>
-      <p>Let’s build something amazing.</p>
-    `,
-    "Welcome to Homio. Your account is ready."
+    toEmail,
+    subject,
+    htmlTemplate,
+    message
   );
 
   try {
     const response = await sesClient.send(sendEmailCommand);
-    console.log("✅ Email sent successfully:", response.MessageId);
+    console.log(`✅ Email sent to ${toEmail}`);
     return response;
   } catch (err) {
     console.log("\n❌ AWS FULL ERROR:");

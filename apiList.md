@@ -28,4 +28,4 @@ GET /user/connections
 GET /user/feed - Gets you the profiles of other users on platform
 Status: ignored, interested, accepeted, rejected
 
-devTinder/apiList.md at main · akshaymarch7/devTinder
+changed mongose paasword
