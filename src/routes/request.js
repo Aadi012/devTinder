@@ -1,43 +1,53 @@
+// routes/request.js
 const express = require("express");
-
+const mongoose = require("mongoose");
 const requestRouter = express.Router();
 const { userAuth } = require("../middlewares/auth");
 const ConnectionRequest = require("../models/connectionRequest");
 const User = require("../models/user");
 const { run } = require("../utils/sendEmail");
 
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+
 requestRouter.post(
   "/request/send/:status/:toUserId",
   userAuth,
   async (req, res) => {
     try {
-      const fromUserId = req.user._id;
+      const fromUserId = req.user._id.toString();
       const toUserId = req.params.toUserId;
       const status = req.params.status;
 
-      const allowedStatus = ["ignored", "interested"];
+      const allowedStatus = ["ignored", "interested", "superliked"];
       if (!allowedStatus.includes(status)) {
-        return res
-          .status(400)
-          .json({ message: "Invalid status type: " + status });
+        return res.status(400).json({ success: false, message: "Invalid request status." });
+      }
+
+      if (!isValidObjectId(toUserId)) {
+        return res.status(400).json({ success: false, message: "Invalid user ID." });
+      }
+
+      if (fromUserId === toUserId) {
+        return res.status(400).json({ success: false, message: "Cannot send request to yourself." });
       }
 
       const toUser = await User.findById(toUserId);
       if (!toUser) {
-        return res.status(404).json({ message: "User not found!" });
+        return res.status(404).json({ success: false, message: "Target user not found." });
       }
 
-      const existingConnectionRequest = await ConnectionRequest.findOne({
+      const existing = await ConnectionRequest.findOne({
         $or: [
           { fromUserId, toUserId },
           { fromUserId: toUserId, toUserId: fromUserId },
         ],
       });
 
-      if (existingConnectionRequest) {
-        return res
-          .status(400)
-          .send({ message: "Connection Request Already Exists!!" });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: "A connection or pending request already exists between you two.",
+        });
       }
 
       const connectionRequest = new ConnectionRequest({
@@ -48,31 +58,23 @@ requestRouter.post(
 
       const data = await connectionRequest.save();
 
-      const subject = `New connection request from ${req.user.firstName} on Homio`;
+      // send email asynchronously
+      // if (toUser.emailId) {
+      //   const subject = `New connection request from ${req.user.firstName} on Homio`;
+      //   const message = `Hi ${toUser.firstName},\n\nYou have received a new connection request from ${req.user.firstName}.\n\nLogin: https://www.homio.co.in`;
+      //   run(subject, message, toUser.emailId).catch((err) => console.error("EMAIL ERROR:", err));
+      // }
 
-      const message = `
-Hi ${toUser.firstName},
-
-You have received a new connection request from ${req.user.firstName}.
-
-Login here: https://www.homio.co.in
-      `;
-
-      if (toUser.emailId) {
-        const emailRes = await run(subject, message, toUser.emailId);
-        console.log("EMAIL SENT ✅:", emailRes?.MessageId);
-      }
-
-      const statusMessageMap = {
-        interested: "is interested in connecting with",
-        ignored: "has ignored",
+      const statusMap = {
+        interested: `${req.user.firstName} is interested in connecting with ${toUser.firstName}.`,
+        ignored: `${req.user.firstName} ignored ${toUser.firstName}.`,
+        superliked: `${req.user.firstName} superliked ${toUser.firstName}!`,
       };
 
-      const messageResponse = `${req.user.firstName} ${statusMessageMap[status]} ${toUser.firstName}`;
-
-      res.json({ message: messageResponse, data });
+      return res.json({ success: true, message: statusMap[status], data });
     } catch (err) {
-      res.status(400).send("ERROR: " + err.message);
+      console.error("SEND REQUEST ERROR:", err);
+      return res.status(500).json({ success: false, message: "Failed to send request." });
     }
   }
 );
@@ -82,33 +84,35 @@ requestRouter.post(
   userAuth,
   async (req, res) => {
     try {
-      const loggedInUser = req.user;
       const { status, requestId } = req.params;
+      const loggedInUserId = req.user._id;
 
       const allowedStatus = ["accepted", "rejected"];
       if (!allowedStatus.includes(status)) {
-        return res.status(400).json({ message: "Status not allowed!" });
+        return res.status(400).json({ success: false, message: "Invalid review status." });
+      }
+
+      if (!isValidObjectId(requestId)) {
+        return res.status(400).json({ success: false, message: "Invalid request ID." });
       }
 
       const connectionRequest = await ConnectionRequest.findOne({
         _id: requestId,
-        toUserId: loggedInUser._id,
+        toUserId: loggedInUserId,
         status: "interested",
       });
 
       if (!connectionRequest) {
-        return res
-          .status(404)
-          .json({ message: "Connection request not found" });
+        return res.status(404).json({ success: false, message: "Request not found or already processed." });
       }
 
       connectionRequest.status = status;
-
       const data = await connectionRequest.save();
 
-      res.json({ message: "Connection request " + status, data });
+      return res.json({ success: true, message: `Connection request ${status}.`, data });
     } catch (err) {
-      res.status(400).send("ERROR: " + err.message);
+      console.error("REVIEW REQUEST ERROR:", err);
+      return res.status(500).json({ success: false, message: "Failed to review request." });
     }
   }
 );

@@ -10,9 +10,12 @@ const userSchema = new mongoose.Schema(
       required: true,
       minLength: 3,
     },
+
     lastName: {
       type: String,
+      default: "",
     },
+
     emailId: {
       type: String,
       lowercase: true,
@@ -25,38 +28,85 @@ const userSchema = new mongoose.Schema(
         }
       },
     },
+
     password: {
       type: String,
       required: true,
       validate(value) {
         if (!validator.isStrongPassword(value)) {
-          throw new Error("Enter a strong password: " + value);
+          throw new Error("Enter a strong password");
         }
       },
     },
+
     gender: {
       type: String,
       enum: ["male", "female", "other"],
     },
+
     age: {
       type: Number,
       min: 18,
     },
+
     photoUrl: {
       type: String,
-      default: "", // initially empty, will be set in pre-save
+      default: "",
       validate(value) {
         if (value && !validator.isURL(value)) {
-          throw new Error("Invalid Photo URL: " + value);
+          throw new Error("Invalid Photo URL");
         }
       },
     },
+
     about: {
       type: String,
-      default: "", // will be set in pre-save
+      default: "",
     },
+
     skills: {
       type: [String],
+      default: [],
+    },
+
+    /* --------------------------
+       PROFILE FIELDS
+    --------------------------- */
+
+    location: {
+      type: String,
+      default: "",
+    },
+
+    occupation: {
+      type: String,
+      default: "",
+    },
+
+    company: {
+      type: String,
+      default: "",
+    },
+
+    education: {
+      type: String,
+      default: "",
+    },
+
+    interests: {
+      type: [String],
+      default: [],
+    },
+
+    vibe: {
+      type: String,
+      default: "", // e.g. "Night Coder", "Chai & Code"
+    },
+
+    social: {
+      github: { type: String, default: "" },
+      linkedin: { type: String, default: "" },
+      portfolio: { type: String, default: "" },
     },
   },
   {
@@ -64,44 +114,49 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// Set default photoUrl and about based on gender if not provided
+/* --------------------------
+   DEFAULT PHOTO + ABOUT
+--------------------------- */
+
 userSchema.pre("save", function (next) {
   if (!this.photoUrl || this.photoUrl.trim() === "") {
-    // Set default photo based on gender
     if (this.gender === "male") {
       this.photoUrl =
-        "https://cdn-icons-png.flaticon.com/512/147/147144.png"; // default male
+        "https://cdn-icons-png.flaticon.com/512/147/147144.png";
     } else if (this.gender === "female") {
       this.photoUrl =
-        "https://cdn-icons-png.flaticon.com/512/194/194938.png"; // default female
+        "https://cdn-icons-png.flaticon.com/512/194/194938.png";
     } else {
       this.photoUrl =
-        "https://cdn-icons-png.flaticon.com/512/149/149071.png"; // default other/unknown
+        "https://cdn-icons-png.flaticon.com/512/149/149071.png";
     }
   }
 
   if (!this.about || this.about.trim() === "") {
-    this.about = `Hi, I am ${this.firstName} ${this.lastName || ""}. Passionate developer exploring new technologies and building amazing projects!`;
+    this.about = `Hi, I am ${this.firstName} ${
+      this.lastName || ""
+    }. Passionate developer exploring new technologies and building amazing projects!`;
   }
 
   next();
 });
 
-// JWT generation
+/* --------------------------
+   JWT TOKEN
+--------------------------- */
+
 userSchema.methods.getJWT = async function () {
-  const user = this;
-  const token = await jwt.sign({ _id: user._id }, "DEV@Tinder28928", {
+  return jwt.sign({ _id: this._id }, "DEV@Tinder28928", {
     expiresIn: "7d",
   });
-  return token;
 };
 
-// Validate password
+/* --------------------------
+   PASSWORD VALIDATION
+--------------------------- */
+
 userSchema.methods.validatePassword = async function (passwordInputByUser) {
-  const user = this;
-  const passwordHash = user.password;
-  const isPasswordValid = await bcrypt.compare(passwordInputByUser, passwordHash);
-  return isPasswordValid;
+  return bcrypt.compare(passwordInputByUser, this.password);
 };
 
 module.exports = mongoose.model("User", userSchema);

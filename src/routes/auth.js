@@ -3,16 +3,60 @@ const authRouter = express.Router();
 const { validateSignupData } = require("../utils/validation");
 const User = require("../models/user");
 const bcrypt = require("bcrypt");
+const validator = require("validator");
 
-// ------------------ SIGNUP ------------------
+/* ----------------------------------------
+      NORMALIZE EMAIL
+---------------------------------------- */
+const normalizeEmail = (email) => email.toLowerCase().trim();
+
+/* ----------------------------------------
+      SAFE USER OBJECT (REMOVE PASSWORD)
+---------------------------------------- */
+const toSafeUser = (user) => {
+  const obj = user.toObject();
+  delete obj.password;
+  return obj;
+};
+
+/* ----------------------------------------
+      SECURE COOKIE SETTINGS
+---------------------------------------- */
+const cookieOptions = {
+  httpOnly: true,
+  sameSite: "lax",
+  secure: process.env.NODE_ENV === "production",
+  expires: new Date(Date.now() + 8 * 3600000), // 8 hr
+};
+
+/* ============================================================
+                      SIGNUP (FULL PROFILE)
+============================================================ */
 authRouter.post("/signup", async (req, res) => {
   try {
-    // Validate input fields
     validateSignupData(req);
 
-    const { firstName, lastName, emailId, password, skills, age, gender, about, photoUrl } = req.body;
+    let {
+      firstName,
+      lastName,
+      emailId,
+      password,
+      age,
+      gender,
+      about,
+      photoUrl,
+      skills = [],
+      interests = [],
+      location = "",
+      occupation = "",
+      education = "",
+      company = "",
+      social = {},
+    } = req.body;
 
-    // Check if email already exists
+    emailId = normalizeEmail(emailId);
+
+    // Check if user already exists
     const existingUser = await User.findOne({ emailId });
     if (existingUser) {
       return res.status(400).json({
@@ -21,44 +65,76 @@ authRouter.post("/signup", async (req, res) => {
       });
     }
 
-    // Strong password recommendation
-    if (password.length < 6) {
+    // Strong password validation
+    if (!validator.isStrongPassword(password)) {
       return res.status(400).json({
         success: false,
-        message: "Password must be at least 6 characters long.",
+        message:
+          "Password must be strong (min 8 chars incl uppercase, number & symbol).",
       });
+    }
+
+    // Convert array-like strings into arrays
+    if (typeof skills === "string") {
+      skills = skills.split(",").map((s) => s.trim());
+    }
+    if (typeof interests === "string") {
+      interests = interests.split(",").map((s) => s.trim());
+    }
+
+    // Validate social URLs
+    const validSocial = {};
+    const allowedSocial = ["github", "linkedin", "portfolio"];
+
+    for (const key of allowedSocial) {
+      if (social[key]) {
+        if (!validator.isURL(social[key])) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid URL for ${key}`,
+          });
+        }
+        validSocial[key] = social[key];
+      } else {
+        validSocial[key] = "";
+      }
     }
 
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // Create new user
     const user = new User({
       firstName,
       lastName,
       emailId,
       password: passwordHash,
-      skills,
       age,
       gender,
       about,
       photoUrl,
+      skills,
+      interests,
+      location,
+      occupation,
+      education,
+      company,
+      social: validSocial,
     });
 
     const savedUser = await user.save();
+    const safeUser = toSafeUser(savedUser);
+
+    // Assign JWT
     const token = await savedUser.getJWT();
 
-    // Set secure cookie
-    res.cookie("token", token, {
-      httpOnly: true,
-      expires: new Date(Date.now() + 8 * 3600000),
-      sameSite: "lax",
-      secure: false, // Change to true when using HTTPS
-    });
+    // Set cookie
+    res.cookie("token", token, cookieOptions);
 
     return res.json({
       success: true,
       message: "Account created successfully!",
-      data: savedUser,
+      data: safeUser,
     });
 
   } catch (err) {
@@ -71,12 +147,15 @@ authRouter.post("/signup", async (req, res) => {
   }
 });
 
-// ------------------ LOGIN ------------------
+/* ============================================================
+                      LOGIN
+============================================================ */
 authRouter.post("/login", async (req, res) => {
   try {
-    const { emailId, password } = req.body;
+    let { emailId, password } = req.body;
 
-    // Check user existence
+    emailId = normalizeEmail(emailId);
+
     const user = await User.findOne({ emailId });
     if (!user) {
       return res.status(400).json({
@@ -85,9 +164,8 @@ authRouter.post("/login", async (req, res) => {
       });
     }
 
-    // Validate password
-    const isPasswordValid = await user.validatePassword(password);
-    if (!isPasswordValid) {
+    const isValid = await user.validatePassword(password);
+    if (!isValid) {
       return res.status(400).json({
         success: false,
         message: "Incorrect email or password.",
@@ -96,18 +174,12 @@ authRouter.post("/login", async (req, res) => {
 
     const token = await user.getJWT();
 
-    // Set cookie
-    res.cookie("token", token, {
-      httpOnly: true,
-      expires: new Date(Date.now() + 8 * 3600000),
-      sameSite: "lax",
-      secure: false,
-    });
+    res.cookie("token", token, cookieOptions);
 
     return res.json({
       success: true,
-      message: "Login successful!",
-      data: user,
+      message: "Logged in successfully!",
+      data: toSafeUser(user),
     });
 
   } catch (err) {
@@ -120,14 +192,16 @@ authRouter.post("/login", async (req, res) => {
   }
 });
 
-// ------------------ LOGOUT ------------------
+/* ============================================================
+                      LOGOUT
+============================================================ */
 authRouter.post("/logout", async (req, res) => {
   try {
     res.cookie("token", null, {
       httpOnly: true,
-      expires: new Date(Date.now()),
       sameSite: "lax",
-      secure: false,
+      secure: process.env.NODE_ENV === "production",
+      expires: new Date(Date.now()),
     });
 
     return res.json({
@@ -135,6 +209,8 @@ authRouter.post("/logout", async (req, res) => {
       message: "Logged out successfully.",
     });
   } catch (err) {
+    console.error("LOGOUT ERROR:", err.message);
+
     return res.status(400).json({
       success: false,
       message: "Logout failed. Try again!",
