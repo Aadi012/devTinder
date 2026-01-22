@@ -12,6 +12,12 @@ const {
 paymentRouter.post("/payment/create", userAuth, async (req, res) => {
   try {
     const { membershipType } = req.body;
+    if (!membershipAmount[membershipType]) {
+      return res.status(400).json({
+        msg: "Invalid or unsupported membership type",
+      });
+    }
+
     const { firstName, lastName, emailId } = req.user;
 
     const order = await razorpayInstance.orders.create({
@@ -42,6 +48,8 @@ paymentRouter.post("/payment/create", userAuth, async (req, res) => {
     const savedPayment = await payment.save();
 
     // Return back my order details to frontend
+    console.log("LOCAL BACKEND KEY:", process.env.RAZORPAY_KEY_ID);
+
     res.json({ ...savedPayment.toJSON(), keyId: process.env.RAZORPAY_KEY_ID });
   } catch (err) {
     return res.status(500).json({ msg: err.message });
@@ -97,12 +105,28 @@ paymentRouter.post("/payment/webhook", async (req, res) => {
 });
 
 paymentRouter.get("/premium/verify", userAuth, async (req, res) => {
-  const user = req.user.toJSON();
-  console.log(user);
-  if (user.isPremium) {
-    return res.json({ ...user });
+  try {
+    // userAuth guarantees req.user if authenticated
+    if (!req.user) {
+      return res.status(401).json({
+        isPremium: false,
+        membershipType: null,
+        msg: "User not authenticated",
+      });
+    }
+
+    return res.json({
+      isPremium: req.user.isPremium === true,
+      membershipType: req.user.membershipType || null,
+    });
+  } catch (err) {
+    console.error("Premium verify error:", err);
+    return res.status(500).json({
+      isPremium: false,
+      msg: "Internal server error",
+    });
   }
-  return res.json({ ...user });
 });
+
 
 module.exports = paymentRouter;
